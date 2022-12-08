@@ -1,0 +1,143 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+Loading the CSV Data
+```{r}
+library(dplyr)
+df <- read.csv('/Users/tomdavkam/Desktop/244final/insurance.csv')
+
+df$sex <- unclass(factor(df$sex)) - 1
+df$smoker <- unclass(factor(df$smoker)) - 1
+df <- df %>% mutate(nw = ifelse(region == "northwest", 1, 0))
+df <- df %>% mutate(ne = ifelse(region == "northeast", 1, 0))
+df <- df %>% mutate(sw = ifelse(region == "southwest", 1, 0))
+```
+
+All data is now encoded
+```{r}
+head(df)
+```
+
+```{r}
+model <- lm(charges ~ age + sex  + children + bmi + smoker, data=df)
+summary(model)
+```
+
+
+
+```{r}
+df_now <- df[c('age', 'sex','bmi', 'children', 'smoker')]
+B = 1338
+```
+
+
+```{r}
+library(AlgDesign)
+set.seed(244)
+ans = optFederov( ~ ., data = df_now, nTrials = B, maxIteration=10000)
+```
+
+```{r}
+df_rand <- df_now[sample(nrow(df_now),size=B,replace=FALSE),]
+df_opt <- df_now[ans$rows,]
+df_first <- head(df_now, B)
+```
+
+```{r}
+x = 6:200
+y = integer(length(x))
+z = integer(length(x))
+i = 0
+for (H in x) {
+  ans = optFederov( ~ ., data = df_now, nTrials = H, maxIteration=10000)
+  df_opt <- df_now[ans$rows,]
+  matrix_opt <- data.matrix(df_opt)
+  sig_opt <- t(matrix_opt) %*% matrix_opt
+  y[i] <- det(sig_opt)**(-1/5)
+  
+  df_rand <- df_now[sample(nrow(df_now),size=H,replace=FALSE),]
+  matrix_rand <- data.matrix(df_rand)
+  sig_rand <- t(matrix_rand) %*% matrix_rand
+  z[i] <- det(sig_rand) ** (-1/5)
+  i = i + 1
+}
+```
+
+```{r}
+print(z)
+```
+
+```{r}
+matrix <- data.matrix(df_first)
+matrix_rand <- data.matrix(df_rand)
+matrix_opt <- data.matrix(df_opt)
+
+sig <- t(matrix) %*% matrix
+sig_rand <- t(matrix_rand) %*% matrix_rand
+sig_opt <- t(matrix_opt) %*% matrix_opt
+
+inv <- solve(sig)
+inv_rand <- solve(sig_rand)
+inv_opt <- solve(sig_opt)
+
+print("D-criterion")
+det(sig) ** (-1/5)
+det(sig_rand) ** (-1/5)
+det(sig_opt)**(-1/5)
+
+print("A-Criterion")
+sum(diag(inv)) / 5
+sum(diag(inv_rand)) / 5
+sum(diag(inv_opt)) / 5
+
+print("E-Criterion")
+norm(inv, "2")
+norm(inv_rand, "2")
+norm(inv_opt, "2")
+B
+
+```
+
+```{r}
+model_rand <- lm(charges ~ age + sex + bmi + children + smoker, data=df_rand)
+summary(model_rand)
+```
+```{r}
+model_opt <- lm(charges ~ age + sex + bmi + children + smoker, data=df_opt)
+summary(model_opt)
+```
+
+```{r}
+full_data <- data.frame(pred=predict(model, df),actual=df$charges)
+
+mean((full_data$actual - full_data$pred)^2)
+```
+
+```{r}
+rand_data <- data.frame(pred=predict(model_rand, df),actual=df$charges)
+
+mean((rand_data$actual - rand_data$pred)^2)
+```
+
+
+```{r}
+model_c  <- summary(model)$coefficients
+model_c_opt <- summary(model_opt)$coefficients
+model_c_rand <- summary(model_rand)$coefficients
+
+model_c - model_c_rand
+model_c - model_c_opt
+```
+
+
+
+
+
+
+
+
+
